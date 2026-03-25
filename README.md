@@ -6,8 +6,6 @@ A from-scratch C++ inference engine for Llama 2 transformer models. Implements t
 
 ## Architecture Overview
 
-The implementation follows the Llama 2 architecture exactly as described in the original paper and matches the binary checkpoint format produced by Andrej Karpathy's `llama2.c` export scripts. The inference loop is single-threaded, numerically faithful to the reference, and written to be readable alongside the theory.
-
 ### Transformer Forward Pass
 
 Each token processed by `forward()` runs through the following stages:
@@ -131,15 +129,6 @@ The two `freq_cis` blocks are skipped because RoPE is computed on the fly. A neg
 
 ---
 
-## Dependencies
-
-| Dependency | Purpose |
-|---|---|
-| Protocol Buffers | Model config and tokenizer serialization |
-| GoogleTest | Unit tests |
-| CMake >= 3.16 | Build system |
-
----
 
 ## Building
 
@@ -150,12 +139,6 @@ Install dependencies on Debian/Ubuntu:
 ```bash
 sudo apt-get update
 sudo apt-get install -y cmake protobuf-compiler libprotobuf-dev libgtest-dev
-```
-
-On macOS with Homebrew:
-
-```bash
-brew install cmake protobuf googletest
 ```
 
 ### Compile
@@ -181,9 +164,6 @@ Example with a 15M parameter Llama 2 model:
 ```bash
 ./build/run_main stories15M.bin tokenizer.bin "Once upon a time"
 ```
-
-Checkpoints and tokenizer files compatible with this engine can be exported from the `llama2.c` project or downloaded from Hugging Face in the correct flat binary format.
-
 ---
 
 ## Running Tests
