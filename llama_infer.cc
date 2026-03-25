@@ -11,10 +11,8 @@
 
 namespace llama_infer {
 
-// ---------------------------------------------------------------------------
 // allocState — mirrors allocState() in the reference C code exactly.
 // kv_dim = (dim * n_kv_heads) / num_heads
-// ---------------------------------------------------------------------------
 static void allocState(LlamaRunState* s, const Config& c)
 {
     int kv_dim = (c.dim() * c.n_kv_heads()) / c.num_heads();
@@ -37,7 +35,6 @@ static void allocState(LlamaRunState* s, const Config& c)
     s->value_cache.resize((size_t)c.num_layers() * c.seq_len() * kv_dim);
 }
 
-// ---------------------------------------------------------------------------
 // wireWeights — pointer layout must match llama2.c export.py exactly.
 //
 // Checkpoint binary layout (floats, after the 7-int header):
@@ -61,7 +58,6 @@ static void allocState(LlamaRunState* s, const Config& c)
 // match the reference C implementation; if the checkpoint was built without
 // it the skip pushes wcls into garbage — but those checkpoints set
 // vocab_size < 0 (shared), so wcls is never read from the file.
-// ---------------------------------------------------------------------------
 static void wireWeights(LlamaWeights* w, const Config& c,
                         float* ptr, int shared)
 {
@@ -113,15 +109,12 @@ static void wireWeights(LlamaWeights* w, const Config& c,
             (void*)w->wcls, shared);
 }
 
-// ---------------------------------------------------------------------------
-// loadTransformer
-// ---------------------------------------------------------------------------
-
 // On-disk header layout (7 × int32).
 struct BinaryConfig {
     int32_t dim, hidden_dim, num_layers, num_heads, n_kv_heads, vocab_size, seq_len;
 };
 
+// Function to load the transformer model from a binary file, including the header and weights.
 void loadTransformer(LlamaTransformer& t, const char* path)
 {
     FILE* f = fopen(path, "rb");
@@ -137,17 +130,6 @@ void loadTransformer(LlamaTransformer& t, const char* path)
             bc.dim, bc.hidden_dim, bc.num_layers, bc.num_heads,
             bc.n_kv_heads, bc.vocab_size, bc.seq_len);
 
-    // -----------------------------------------------------------------------
-    // BUG FIX: shared flag convention.
-    //
-    // Reference C code:
-    //   int shared = transformer->config.vocab_size > 0;
-    //
-    // Positive vocab_size in the raw header means the classifier weight IS
-    // shared with the token embedding (shared=1).  Negative means a separate
-    // wcls block follows rms_final (shared=0).
-    // The previous C++ code had this inverted (< 0 → shared=1).
-    // -----------------------------------------------------------------------
     int shared = (bc.vocab_size > 0) ? 1 : 0;
     int vocab  = std::abs(bc.vocab_size);
 
@@ -207,9 +189,7 @@ void loadTransformer(LlamaTransformer& t, const char* path)
     allocState(&t.state, t.config);
 }
 
-// ---------------------------------------------------------------------------
-// loadTokenizer
-// ---------------------------------------------------------------------------
+// Function to load the tokenizer data from a binary file, including the vocabulary and scores.
 void loadTokenizer(TokenizerData* t, const char* path, int vocab_size)
 {
     t->set_vocab_sized(vocab_size);
@@ -239,9 +219,7 @@ void loadTokenizer(TokenizerData* t, const char* path, int vocab_size)
     fprintf(stderr, "Tokenizer: %d tokens loaded\n", vocab_size);
 }
 
-// ---------------------------------------------------------------------------
-// vocabLookup — linear scan matching the C implementation.
-// ---------------------------------------------------------------------------
+// Function to look up a token string in the tokenizer's vocabulary and return its index, or -1 if not found.
 static int vocabLookup(const TokenizerData* t, const std::string& s)
 {
     for (int i = 0; i < t->vocab_sized(); i++)
@@ -249,9 +227,7 @@ static int vocabLookup(const TokenizerData* t, const std::string& s)
     return -1;
 }
 
-// ---------------------------------------------------------------------------
-// encode — BPE tokenise; mirrors the C version byte-for-byte.
-// ---------------------------------------------------------------------------
+// Function to encode a text string into a sequence of token indices using the tokenizer's vocabulary and BPE merges.
 int encode(const TokenizerData* t, const char* text, int* tokens)
 {
     int n = 0;
@@ -298,9 +274,7 @@ int encode(const TokenizerData* t, const char* text, int* tokens)
     return n;
 }
 
-// ---------------------------------------------------------------------------
-// decode — mirrors the C version including leading-space strip and byte-piece.
-// ---------------------------------------------------------------------------
+// Function to decode a single token index back into a string, handling special cases for leading spaces and byte-encoded pieces.
 std::string decode(const TokenizerData* t, int prev, int cur)
 {
     if (cur < 0 || cur >= t->vocab_sized()) return "";
@@ -318,10 +292,6 @@ std::string decode(const TokenizerData* t, int prev, int cur)
     return s;
 }
 
-// ---------------------------------------------------------------------------
-// Primitive math helpers
-// ---------------------------------------------------------------------------
-
 void matmul(std::vector<float>& out,
             const std::vector<float>& x,
             const float* W, int n, int d)
@@ -333,6 +303,7 @@ void matmul(std::vector<float>& out,
     }
 }
 
+// Function to perform RMS normalization on the input vector x using the provided weights w, and store the result in out.
 void rmsnorm(std::vector<float>& out,
              const std::vector<float>& x,
              const float* w, int n)
@@ -343,6 +314,7 @@ void rmsnorm(std::vector<float>& out,
     for (int i = 0; i < n; i++) out[i] = x[i] * ss * w[i];
 }
 
+// Function to apply the softmax function to the input vector x of length n, modifying x in place to contain the resulting probabilities.
 void softmax(std::vector<float>& x, int n)
 {
     float mx = x[0];
@@ -352,7 +324,7 @@ void softmax(std::vector<float>& x, int n)
     for (int i = 0; i < n; i++) x[i] /= sum;
 }
 
-// Operate on a raw sub-slice of state.attention without copying.
+// In-place version of softmax that operates directly on a float pointer, modifying the values in place.
 static void softmax_inplace(float* x, int n)
 {
     float mx = x[0];
@@ -362,10 +334,7 @@ static void softmax_inplace(float* x, int n)
     for (int i = 0; i < n; i++) x[i] /= sum;
 }
 
-// ---------------------------------------------------------------------------
-// forward — one token, one position.
-// Mirrors the C forward() function exactly, including all index arithmetic.
-// ---------------------------------------------------------------------------
+// Function to perform the forward pass of the transformer model for a single token at a given position, updating the state and returning the output logits.
 std::vector<float>& forward(LlamaTransformer& transformer, int token, int pos)
 {
     const Config&  config  = transformer.config;
@@ -384,7 +353,7 @@ std::vector<float>& forward(LlamaTransformer& transformer, int token, int pos)
 
     for (int l = 0; l < config.num_layers(); l++) {
 
-        // --- Attention pre-norm -------------------------------------------
+        // Attention pre-norm
         rmsnorm(state.xb, state.x, weights.rms_attention + l * dim, dim);
 
         // Q projection: [dim] → [dim]
@@ -434,7 +403,7 @@ std::vector<float>& forward(LlamaTransformer& transformer, int token, int pos)
         std::copy(state.k.begin(), state.k.end(), kc);
         std::copy(state.v.begin(), state.v.end(), vc);
 
-        // --- Multi-head attention -----------------------------------------
+        // Multi-head attention
         for (int h = 0; h < config.num_heads(); h++) {
             float* q_h   = state.q.data()         + h * head_size;
             float* att_h = state.attention.data()  + h * config.seq_len();
@@ -469,7 +438,7 @@ std::vector<float>& forward(LlamaTransformer& transformer, int token, int pos)
         // Residual connection.
         for (int i = 0; i < dim; i++) state.x[i] += state.xb2[i];
 
-        // --- FFN (SwiGLU) ------------------------------------------------
+        // FFN (SwiGLU)
         rmsnorm(state.xb, state.x, weights.rms_ffn + l * dim, dim);
 
         // Gate  (w1) and up-projection (w3).

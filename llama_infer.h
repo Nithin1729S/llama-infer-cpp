@@ -4,14 +4,10 @@
 #include <vector>
 #include <memory>
 #include <string>
-#include "llama_model.pb.h"   // provides Config, TokenizerData
+#include "llama_model.pb.h"
 
 namespace llama_infer {
 
-// ---------------------------------------------------------------------------
-// Weight pointers — all raw pointers into LlamaModelData::buffer.
-// The layout matches llama2.c export.py exactly (see wireWeights).
-// ---------------------------------------------------------------------------
 struct LlamaWeights {
     float* token_embedding = nullptr;
     float* rms_attention   = nullptr;
@@ -27,17 +23,11 @@ struct LlamaWeights {
     float* wcls            = nullptr;   // == token_embedding when shared
 };
 
-// ---------------------------------------------------------------------------
-// Owns the raw weight data loaded from the checkpoint file.
-// ---------------------------------------------------------------------------
 struct LlamaModelData {
     std::unique_ptr<float[]> buffer;
     size_t size = 0;          // bytes
 };
 
-// ---------------------------------------------------------------------------
-// Intermediate activation tensors — sized once in allocState().
-// ---------------------------------------------------------------------------
 struct LlamaRunState {
     std::vector<float> x;           // current token embedding / residual stream
     std::vector<float> xb;          // scratch after rmsnorm / attention output
@@ -53,19 +43,12 @@ struct LlamaRunState {
     std::vector<float> value_cache; // [num_layers * seq_len * kv_dim]
 };
 
-// ---------------------------------------------------------------------------
-// Top-level transformer bundle.
-// ---------------------------------------------------------------------------
 struct LlamaTransformer {
     Config         config;   // protobuf-generated
     LlamaWeights   weights;
     LlamaRunState  state;
     LlamaModelData data;
 };
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
 
 // Load checkpoint binary and wire up weight pointers + run state.
 void loadTransformer(LlamaTransformer& t, const char* path);
