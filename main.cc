@@ -1,7 +1,6 @@
-#include <iostream>
-#include <vector>
 #include <cmath>
-#include "model.pb.h"
+#include "main.h"
+#include "llama_model.pb.h"
 
 struct RunState {
     std::vector<float> x;
@@ -14,7 +13,7 @@ struct RunState {
     std::vector<float> value_cache;
 };
 
-static void matmul(
+void matmul(
     std::vector<float>& out,
     const std::vector<float>& x,
     const std::vector<float>& W,
@@ -28,7 +27,7 @@ static void matmul(
     }
 }
 
-static void rmsnorm(
+void rmsnorm(
     std::vector<float>& out,
     const std::vector<float>& x,
     const std::vector<float>& w,
@@ -44,7 +43,7 @@ static void rmsnorm(
         out[i] = x[i] * ss * w[i];
 }
 
-static void softmax(std::vector<float>& x, int n) {
+void softmax(std::vector<float>& x, int n) {
     float max = x[0];
     for (int i = 1; i < n; i++)
         if (x[i] > max) max = x[i];
@@ -57,10 +56,4 @@ static void softmax(std::vector<float>& x, int n) {
 
     for (int i = 0; i < n; i++)
         x[i] /= sum;
-}
-
-int main() {
-    Transformer transformer;
-    Tokenizer Tokenizer;
-    return 0;
 }

@@ -1,1 +1,7 @@
 test.c
+.vscode
+build
+*.o
+*.exe
+*.pb.cc
+*.pb.h

@@ -1,4 +1,5 @@
 syntax = "proto3";
+package llama;
 
 message Config {
   int32 dim = 1;
@@ -25,15 +26,15 @@ message Weights {
   repeated float wcls = 12;
 }
 
-message Tokenizer {
+message TokenizerData {
   repeated string vocab = 1;
   repeated float scores = 2;
-  int32 vocab_size = 3;
+  int32 vocab_sized = 3;
   int32 max_token_len = 4;
 }
 
 message Transformer {
   Config config = 1;
   Weights weights = 2;
-  Tokenizer tokenizer = 3;
+  TokenizerData tokenizer = 3;
 }
