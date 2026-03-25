@@ -29,8 +29,6 @@ struct ModelData {
     size_t size;
 };
 
-namespace {
-
 struct RunState {
     std::vector<float> x;
     std::vector<float> xb, xb2;
@@ -63,7 +61,13 @@ void allocState(RunState* state, const Config& config) {
     state->value_cache.resize(config.num_layers() * config.seq_len() * kv_dimensions);
 }
 
-} // anonymous namespace
+// Owns all transformer state; populated by loadTransformer().
+struct Transformer {
+    Config    config;   // proto message
+    Weights   weights;  // raw pointers into data.buffer
+    RunState  state;    // working memory
+    ModelData data;     // owns the weight buffer
+};
 
 // ---------------------------------------------------------------------------
 // Math helpers (unchanged)
@@ -170,11 +174,7 @@ struct BinaryConfig {
     int32_t seq_len;
 };
 
-void loadTransformer(ModelData& data,
-                     Weights&   weights,
-                     RunState&  state,
-                     Config&    config,   // proto Config
-                     const char* path)
+void loadTransformer(Transformer& t, const char* path)
 {
     FILE* file = fopen(path, "rb");
     if (!file) return;
@@ -188,28 +188,28 @@ void loadTransformer(ModelData& data,
     int shared = (bc.vocab_size > 0) ? 1 : 0;
 
     // 2. Populate the proto Config message via its generated setters.
-    config.set_dim(bc.dim);
-    config.set_hidden_dim(bc.hidden_dim);
-    config.set_num_layers(bc.num_layers);
-    config.set_num_heads(bc.num_heads);
-    config.set_n_kv_heads(bc.n_kv_heads);
-    config.set_vocab_size(std::abs(bc.vocab_size));
-    config.set_seq_len(bc.seq_len);
+    t.config.set_dim(bc.dim);
+    t.config.set_hidden_dim(bc.hidden_dim);
+    t.config.set_num_layers(bc.num_layers);
+    t.config.set_num_heads(bc.num_heads);
+    t.config.set_n_kv_heads(bc.n_kv_heads);
+    t.config.set_vocab_size(std::abs(bc.vocab_size));
+    t.config.set_seq_len(bc.seq_len);
 
-    // 3. Memory-map the weight bytes.
+    // 3. Load the weight bytes.
     fseek(file, 0, SEEK_END);
     long file_size = ftell(file);
     fseek(file, sizeof(BinaryConfig), SEEK_SET);
 
-    long wsize = file_size - static_cast<long>(sizeof(BinaryConfig));
-    data.size   = static_cast<size_t>(wsize);
-    data.buffer = std::make_unique<float[]>(wsize / sizeof(float));
+    long wsize  = file_size - static_cast<long>(sizeof(BinaryConfig));
+    t.data.size   = static_cast<size_t>(wsize);
+    t.data.buffer = std::make_unique<float[]>(wsize / sizeof(float));
 
-    fread(data.buffer.get(), 1, wsize, file);
+    fread(t.data.buffer.get(), 1, wsize, file);
     fclose(file);
 
-    wireWeights(&weights, config, data.buffer.get(), shared);
-    allocState(&state, config);
+    wireWeights(&t.weights, t.config, t.data.buffer.get(), shared);
+    allocState(&t.state, t.config);
 }
 
 // ---------------------------------------------------------------------------
@@ -218,7 +218,7 @@ void loadTransformer(ModelData& data,
 // Populates a proto TokenizerData message instead of a raw Tokenizer struct.
 // ---------------------------------------------------------------------------
 
-void loadTokenizer(TokenizerData* t, const char* path, int vocab_size)
+static void loadTokenizer(TokenizerData* t, const char* path, int vocab_size)
 {
     t->set_vocab_sized(vocab_size);   // note: field is named vocab_sized in proto
 
@@ -250,7 +250,7 @@ void loadTokenizer(TokenizerData* t, const char* path, int vocab_size)
 // vocabLookup
 // ---------------------------------------------------------------------------
 
-int vocabLookup(const TokenizerData* t, const std::string& str)
+static int vocabLookup(const TokenizerData* t, const std::string& str)
 {
     for (int i = 0; i < t->vocab_sized(); i++)
         if (t->vocab(i) == str) return i;
@@ -261,7 +261,7 @@ int vocabLookup(const TokenizerData* t, const std::string& str)
 // encode
 // ---------------------------------------------------------------------------
 
-int encode(const TokenizerData* t, const char* text, int* tokens)
+static int encode(const TokenizerData* t, const char* text, int* tokens)
 {
     int n = 0;
     std::string buf;
@@ -307,7 +307,7 @@ int encode(const TokenizerData* t, const char* text, int* tokens)
 // decode
 // ---------------------------------------------------------------------------
 
-const char* decode(const TokenizerData* t, int prev, int cur)
+static const char* decode(const TokenizerData* t, int prev, int cur)
 {
     // vocab(cur) returns a const std::string& — take its c_str for compatibility.
     const char* s = t->vocab(cur).c_str();
@@ -325,6 +325,157 @@ const char* decode(const TokenizerData* t, int prev, int cur)
     }
 
     return s;
+}
+
+// ---------------------------------------------------------------------------
+// softmax overload for raw sub-array pointers (used inside forward())
+// ---------------------------------------------------------------------------
+
+static void softmax(float* x, int n)
+{
+    float max = x[0];
+    for (int i = 1; i < n; i++)
+        if (x[i] > max) max = x[i];
+
+    float sum = 0.0f;
+    for (int i = 0; i < n; i++) {
+        x[i] = expf(x[i] - max);
+        sum  += x[i];
+    }
+
+    for (int i = 0; i < n; i++)
+        x[i] /= sum;
+}
+
+// Runs one token through the full transformer and returns a reference to the
+// logits vector stored in transformer.state.  Callers must not cache the
+// pointer across calls.
+std::vector<float>& forward(Transformer& transformer, int token, int pos)
+{
+    const Config& config  = transformer.config;
+    Weights&      weights = transformer.weights;
+    RunState&     state   = transformer.state;
+
+    const int dim       = config.dim();
+    const int kv_dim    = (dim * config.n_kv_heads()) / config.num_heads();
+    const int head_size = dim / config.num_heads();
+    const int kv_mul    = config.num_heads() / config.n_kv_heads();
+    const int hidden    = config.hidden_dim();
+
+    // ---- Token embedding lookup ----------------------------------------
+    // Copy the embedding row for this token into state.x.
+    const float* emb = weights.token_embedding + token * dim;
+    std::copy(emb, emb + dim, state.x.begin());
+
+    // ---- Transformer layers --------------------------------------------
+    for (int l = 0; l < config.num_layers(); l++) {
+
+        // -- Attention pre-norm
+        rmsnorm(state.xb, state.x, weights.rms_attention + l * dim, dim);
+
+        // -- Q projection
+        matmul(state.q, state.xb, weights.wQ + l * dim * dim, dim, dim);
+
+        // -- RoPE: rotate Q in-place
+        // Each pair (i, i+1) within every head gets the same rotation angle
+        // derived from its position within the head (i % head_size).
+        {
+            float* q = state.q.data();
+            for (int i = 0; i < dim; i += 2) {
+                float freq  = 1.0f / powf(10000.0f, (i % head_size) / (float)head_size);
+                float angle = pos * freq;
+                float c_    = cosf(angle), s_ = sinf(angle);
+                float v0 = q[i], v1 = q[i + 1];
+                q[i]     = v0 * c_ - v1 * s_;
+                q[i + 1] = v0 * s_ + v1 * c_;
+            }
+        }
+
+        // -- K, V projections
+        matmul(state.k, state.xb, weights.wK + l * dim * kv_dim, dim, kv_dim);
+        matmul(state.v, state.xb, weights.wV + l * dim * kv_dim, dim, kv_dim);
+
+        // -- RoPE: rotate K in-place (same formula, but over kv_dim)
+        {
+            float* k = state.k.data();
+            for (int i = 0; i < kv_dim; i += 2) {
+                float freq  = 1.0f / powf(10000.0f, (i % head_size) / (float)head_size);
+                float angle = pos * freq;
+                float c_    = cosf(angle), s_ = sinf(angle);
+                float v0 = k[i], v1 = k[i + 1];
+                k[i]     = v0 * c_ - v1 * s_;
+                k[i + 1] = v0 * s_ + v1 * c_;
+            }
+        }
+
+        // -- Write K and V into the KV-cache at this position
+        const int loff   = l * config.seq_len() * kv_dim;
+        float*    kc_pos = state.key_cache.data()   + loff + pos * kv_dim;
+        float*    vc_pos = state.value_cache.data()  + loff + pos * kv_dim;
+        std::copy(state.k.begin(), state.k.end(), kc_pos);
+        std::copy(state.v.begin(), state.v.end(), vc_pos);
+
+        // -- Multi-head attention
+        for (int h = 0; h < config.num_heads(); h++) {
+            float* q_h   = state.q.data()        + h * head_size;
+            float* att_h = state.attention.data() + h * config.seq_len();
+            float* xb_h  = state.xb.data()        + h * head_size;
+
+            // Dot-product scores against all cached keys up to pos
+            for (int t = 0; t <= pos; t++) {
+                // GQA: multiple Q heads share one KV head (h / kv_mul)
+                float* k_h  = state.key_cache.data()
+                              + loff + t * kv_dim + (h / kv_mul) * head_size;
+                float score = 0.0f;
+                for (int i = 0; i < head_size; i++)
+                    score += q_h[i] * k_h[i];
+                att_h[t] = score / sqrtf(static_cast<float>(head_size));
+            }
+
+            // Softmax over the (pos+1) scores for this head
+            softmax(att_h, pos + 1);
+
+            // Weighted sum of value vectors
+            std::fill(xb_h, xb_h + head_size, 0.0f);
+            for (int t = 0; t <= pos; t++) {
+                float* v_h = state.value_cache.data()
+                             + loff + t * kv_dim + (h / kv_mul) * head_size;
+                float a = att_h[t];
+                for (int i = 0; i < head_size; i++)
+                    xb_h[i] += a * v_h[i];
+            }
+        }
+
+        // -- Output projection + residual connection
+        matmul(state.xb2, state.xb, weights.wO + l * dim * dim, dim, dim);
+        for (int i = 0; i < dim; i++)
+            state.x[i] += state.xb2[i];
+
+        // -- FFN pre-norm
+        rmsnorm(state.xb, state.x, weights.rms_ffn + l * dim, dim);
+
+        // -- FFN projections  (SwiGLU: gate = w1, up = w3, down = w2)
+        matmul(state.hb,  state.xb, weights.w1 + l * dim * hidden, dim, hidden);
+        matmul(state.hb2, state.xb, weights.w3 + l * dim * hidden, dim, hidden);
+
+        // Element-wise SiLU(hb) * hb2
+        for (int i = 0; i < hidden; i++) {
+            float v    = state.hb[i];
+            state.hb[i] = (v / (1.0f + expf(-v))) * state.hb2[i];
+        }
+
+        // -- FFN down-projection + residual connection
+        matmul(state.xb, state.hb, weights.w2 + l * hidden * dim, hidden, dim);
+        for (int i = 0; i < dim; i++)
+            state.x[i] += state.xb[i];
+    }
+
+    // ---- Final norm + classifier projection ----------------------------
+    // rmsnorm is safe in-place here: ss is computed from x before any write.
+    rmsnorm(state.x, state.x, weights.rms_final, dim);
+    matmul(state.logits, state.x, weights.wcls, dim, config.vocab_size());
+
+    return state.logits;
 }
 
 } // namespace llama_infer
