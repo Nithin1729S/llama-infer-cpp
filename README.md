@@ -5,6 +5,8 @@ A from-scratch C++ inference engine for Llama 2 transformer models. Implements t
 ---
 
 ## Architecture Overview
+<img width="1164" height="4394" alt="mermaid-diagram" src="https://github.com/user-attachments/assets/26efaa32-8d28-4d5c-94cb-a7ea7f8bd694" />
+
 
 ### Transformer Forward Pass
 
