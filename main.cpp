@@ -14,18 +14,6 @@ struct RunState {
     std::vector<float> value_cache;
 };
 
-struct Transformer {
-    Config config;     
-    Weights weights;   
-    RunState state;
-};
-
-struct TokenizerRuntime {
-    std::vector<std::string> vocab;
-    std::vector<float> scores;
-    int max_token_len;
-};
-
 static void matmul(float* out, const float* x, const float* W, int n, int d) {
     for (int i = 0; i < d; i++) {
         float val = 0;
