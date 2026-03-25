@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+message Config {
+  int32 dim = 1;
+  int32 hidden_dim = 2;
+  int32 num_layers = 3;
+  int32 num_heads = 4;
+  int32 n_kv_heads = 5;
+  int32 vocab_size = 6;
+  int32 seq_len = 7;
+}
+
+message Weights {
+  repeated float token_embedding = 1;
+  repeated float rms_attention = 2;
+  repeated float wQ = 3;
+  repeated float wK = 4;
+  repeated float wV = 5;
+  repeated float wO = 6;
+  repeated float w1 = 7;
+  repeated float w2 = 8;
+  repeated float w3 = 9;
+  repeated float rms_ffn = 10;
+  repeated float rms_final = 11;
+  repeated float wcls = 12;
+}
+
+message Tokenizer {
+  repeated string vocab = 1;
+  repeated float scores = 2;
+  int32 vocab_size = 3;
+  int32 max_token_len = 4;
+}
+
+message Transformer {
+  Config config = 1;
+  Weights weights = 2;
+  Tokenizer tokenizer = 3;
+}
