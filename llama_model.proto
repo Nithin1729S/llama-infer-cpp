@@ -11,21 +11,6 @@ message Config {
   int32 seq_len = 7;
 }
 
-message Weights {
-  repeated float token_embedding = 1;
-  repeated float rms_attention = 2;
-  repeated float wQ = 3;
-  repeated float wK = 4;
-  repeated float wV = 5;
-  repeated float wO = 6;
-  repeated float w1 = 7;
-  repeated float w2 = 8;
-  repeated float w3 = 9;
-  repeated float rms_ffn = 10;
-  repeated float rms_final = 11;
-  repeated float wcls = 12;
-}
-
 message TokenizerData {
   repeated string vocab = 1;
   repeated float scores = 2;
@@ -35,6 +20,5 @@ message TokenizerData {
 
 message Transformer {
   Config config = 1;
-  Weights weights = 2;
-  TokenizerData tokenizer = 3;
+  TokenizerData tokenizer = 2;
 }

@@ -3,6 +3,8 @@
 
 #include <vector>
 
+namespace llama_infer {
+
 void matmul(std::vector<float>& out,
             const std::vector<float>& x,
             const std::vector<float>& W,
@@ -14,5 +16,7 @@ void rmsnorm(std::vector<float>& out,
              int n);
 
 void softmax(std::vector<float>& x, int n);
+
+}  // namespace llama_infer
 
 #endif

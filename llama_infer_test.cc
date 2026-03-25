@@ -5,7 +5,7 @@
 #include <algorithm>
 
 #include "llama_infer.h"
-
+using namespace llama_infer;
 static constexpr float kEps = 1e-4f;   // tolerance for float comparisons
 class TransformerOpsTest : public ::testing::Test {
 protected:
@@ -353,3 +353,6 @@ TEST_F(TransformerOpsTest, Softmax_PartialRange_DoesNotTouchRest) {
     EXPECT_NEAR(x[3], 99.f, kEps);
     EXPECT_NEAR(x[4], 99.f, kEps);
 }
+
+
+
