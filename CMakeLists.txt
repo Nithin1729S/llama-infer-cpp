@@ -22,3 +22,16 @@ target_link_libraries(run_main
     ${Protobuf_LIBRARIES}
     pthread
 )
+
+add_executable(run_tests
+    llama_infer_test.cc
+    llama_infer.cc
+    ${PROTO_SRCS}
+)
+
+target_link_libraries(run_tests
+    ${Protobuf_LIBRARIES}
+    GTest::gtest
+    GTest::gtest_main
+    pthread
+)
