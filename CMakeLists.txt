@@ -14,8 +14,8 @@ set(PROTO_FILE ${CMAKE_CURRENT_SOURCE_DIR}/llama_model.proto)
 protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTO_FILE})
 
 add_executable(run_tests
-    test.cc
-    main.cc
+    llama_infer_test.cc
+    llama_infer.cc
     ${PROTO_SRCS}
 )
 

@@ -1,5 +1,5 @@
 syntax = "proto3";
-package llama;
+package llama_infer;
 
 message Config {
   int32 dim = 1;

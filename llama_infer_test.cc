@@ -4,7 +4,7 @@
 #include <numeric>
 #include <algorithm>
 
-#include "main.h"
+#include "llama_infer.h"
 
 static constexpr float kEps = 1e-4f;   // tolerance for float comparisons
 class TransformerOpsTest : public ::testing::Test {

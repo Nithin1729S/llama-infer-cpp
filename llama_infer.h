@@ -1,5 +1,5 @@
-#ifndef MAIN_H
-#define MAIN_H
+#ifndef LLAMA_INFER_H
+#define LLAMA_INFER_H
 
 #include <vector>
 

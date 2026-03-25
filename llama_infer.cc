@@ -1,5 +1,5 @@
 #include <cmath>
-#include "main.h"
+#include "llama_infer.h"
 #include "llama_model.pb.h"
 
 struct RunState {
