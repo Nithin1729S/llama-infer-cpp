@@ -1,4 +1,4 @@
-# llama_infer
+# Llama2 Inference Runtime in C++ (RoPE, GQA, SwiGLU, KV Cache)
 
 A from-scratch C++ inference engine for Llama 2 transformer models. Implements the full autoregressive forward pass tokenization, rotary positional embeddings, grouped-query attention, SwiGLU feed-forward networks, and BPE encoding without any deep learning framework dependency. Model configuration and vocabulary are serialized using Protocol Buffers.
 
