@@ -218,7 +218,7 @@ void loadTransformer(ModelData& data,
 // Populates a proto TokenizerData message instead of a raw Tokenizer struct.
 // ---------------------------------------------------------------------------
 
-static void loadTokenizer(TokenizerData* t, const char* path, int vocab_size)
+void loadTokenizer(TokenizerData* t, const char* path, int vocab_size)
 {
     t->set_vocab_sized(vocab_size);   // note: field is named vocab_sized in proto
 
@@ -250,7 +250,7 @@ static void loadTokenizer(TokenizerData* t, const char* path, int vocab_size)
 // vocabLookup
 // ---------------------------------------------------------------------------
 
-static int vocabLookup(const TokenizerData* t, const std::string& str)
+int vocabLookup(const TokenizerData* t, const std::string& str)
 {
     for (int i = 0; i < t->vocab_sized(); i++)
         if (t->vocab(i) == str) return i;
@@ -261,7 +261,7 @@ static int vocabLookup(const TokenizerData* t, const std::string& str)
 // encode
 // ---------------------------------------------------------------------------
 
-static int encode(const TokenizerData* t, const char* text, int* tokens)
+int encode(const TokenizerData* t, const char* text, int* tokens)
 {
     int n = 0;
     std::string buf;
@@ -307,7 +307,7 @@ static int encode(const TokenizerData* t, const char* text, int* tokens)
 // decode
 // ---------------------------------------------------------------------------
 
-static const char* decode(const TokenizerData* t, int prev, int cur)
+const char* decode(const TokenizerData* t, int prev, int cur)
 {
     // vocab(cur) returns a const std::string& — take its c_str for compatibility.
     const char* s = t->vocab(cur).c_str();
