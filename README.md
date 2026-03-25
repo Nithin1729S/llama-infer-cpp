@@ -168,6 +168,9 @@ Example with a 15M parameter Llama 2 model:
 ```
 ---
 
+<img width="1622" height="185" alt="image" src="https://github.com/user-attachments/assets/d675a39c-c98d-410b-9fe8-76232b5f334c" />
+<img width="1316" height="239" alt="image" src="https://github.com/user-attachments/assets/a62634d3-432c-4753-8b16-d984bbeefeab" />
+
 ## Running Tests
 
 Tests cover `matmul`, `rmsnorm`, `softmax`, `encode`, and `decode` using GoogleTest. Build and run with:
