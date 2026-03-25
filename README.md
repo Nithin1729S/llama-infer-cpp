@@ -162,7 +162,7 @@ This produces the `run_main` binary inside `build/`.
 Example with a 15M parameter Llama 2 model:
 
 ```bash
-./build/run_main stories15M.bin tokenizer.bin "Once upon a time"
+./build/run_main model.bin tokenizer.bin "Once upon a time"
 ```
 ---
 
@@ -174,13 +174,7 @@ Tests cover `matmul`, `rmsnorm`, `softmax`, `encode`, and `decode` using GoogleT
 mkdir build && cd build
 cmake ..
 make -j$(nproc)
-ctest --output-on-failure
-```
-
-Or run the test binary directly for verbose output:
-
-```bash
-./build/run_tests --gtest_v=1
+./run_tests
 ```
 
 ---
