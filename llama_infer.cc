@@ -8,6 +8,7 @@
 #include <string>
 #include <algorithm>
 #include "llama_infer.h"
+#include <omp.h>
 
 namespace llama_infer {
 
@@ -296,6 +297,7 @@ void matmul(std::vector<float>& out,
             const std::vector<float>& x,
             const float* W, int n, int d)
 {
+    #pragma omp parallel for
     for (int i = 0; i < d; i++) {
         float val = 0.0f;
         for (int j = 0; j < n; j++) val += x[j] * W[i * n + j];
@@ -404,6 +406,7 @@ std::vector<float>& forward(LlamaTransformer& transformer, int token, int pos)
         std::copy(state.v.begin(), state.v.end(), vc);
 
         // Multi-head attention
+        #pragma omp parallel for
         for (int h = 0; h < config.num_heads(); h++) {
             float* q_h   = state.q.data()         + h * head_size;
             float* att_h = state.attention.data()  + h * config.seq_len();

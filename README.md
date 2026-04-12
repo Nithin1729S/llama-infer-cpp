@@ -208,6 +208,15 @@ make -j$(nproc)
 
 ---
 
+## Performance Optimizations
+
+- Parallelized matrix multiplication using OpenMP (`#pragma omp parallel for`)
+- Multi-threaded execution applied to all major linear projections (Q, K, V, O, FFN)
+- Reduced per-token latency by parallelizing compute-heavy operations
+- Thread count configurable via `OMP_NUM_THREADS` or `omp_set_num_threads()`
+
+--- 
+
 ## References
 
 - Touvron et al., "Llama 2: Open Foundation and Fine-Tuned Chat Models" (2023)

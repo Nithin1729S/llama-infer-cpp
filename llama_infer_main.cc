@@ -15,7 +15,7 @@ int main(int argc, char* argv[])
                 argv[0]);
         return 1;
     }
-
+    omp_set_num_threads(4);
     LlamaTransformer transformer;
     TokenizerData    tokenizer;
 
